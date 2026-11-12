@@ -117,6 +117,12 @@ class MainWindow(QMainWindow):
             layout.addWidget(panel, 1)
         self.setCentralWidget(central)
 
+        # 現在のスライス位置 [i, j, k] = [x, y, z]（ステップ5で ViewerState に移す）
+        self._pos = [0, 0, 0]
+        self.sagittal_panel.slice_changed.connect(lambda i: self._move_to(i=i))
+        self.coronal_panel.slice_changed.connect(lambda j: self._move_to(j=j))
+        self.axial_panel.slice_changed.connect(lambda k: self._move_to(k=k))
+
         self._create_menus()
         self.statusBar().showMessage(
             "ファイル → DICOMフォルダを開く (Ctrl+O) でデータを選択してください"
@@ -186,8 +192,18 @@ class MainWindow(QMainWindow):
 
         self._set_volume(volume)
 
+    def _move_to(self, i: Optional[int] = None, j: Optional[int] = None, k: Optional[int] = None) -> None:
+        """スライダー操作で、指定した軸だけ位置を変えて再表示する。"""
+        if self.volume is None:
+            return
+        for axis, value in enumerate((i, j, k)):
+            if value is not None:
+                self._pos[axis] = value
+        self._show_position(*self._pos)
+
     def _show_position(self, i: int, j: int, k: int) -> None:
         """(i, j, k) = (x, y, z) の位置で3断面を表示する。"""
+        self._pos = [i, j, k]
         nz, ny, nx = self.volume.shape
         self.axial_panel.show_slice(*self.volume.axial(k), k, nz)
         self.coronal_panel.show_slice(*self.volume.coronal(j), j, ny)
@@ -198,7 +214,7 @@ class MainWindow(QMainWindow):
         nz, ny, nx = volume.shape
         sx, sy, sz = volume.spacing
         for panel in (self.axial_panel, self.coronal_panel, self.sagittal_panel):
-            panel.view.set_window(DEFAULT_WL, DEFAULT_WW)
+            panel.set_window(DEFAULT_WL, DEFAULT_WW)
         # スライス位置は各軸の中央（ステップ5で ViewerState に移す）
         self._show_position(nx // 2, ny // 2, nz // 2)
         self.statusBar().showMessage(

@@ -5,6 +5,10 @@ import numpy as np
 DEFAULT_WL = -600
 DEFAULT_WW = 1500
 
+# スライダーの範囲 [HU]
+WL_MIN, WL_MAX = -1000, 1000
+WW_MIN, WW_MAX = 1, 4000
+
 
 def apply_window(hu: np.ndarray, wl: float, ww: float) -> np.ndarray:
     """HU の2D配列を uint8 の輝度画像に変換する。
