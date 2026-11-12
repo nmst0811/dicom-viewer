@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFileDialog,
+    QHBoxLayout,
     QHeaderView,
     QLabel,
     QMainWindow,
@@ -21,11 +22,12 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
+    QWidget,
 )
 
 from . import dicom_loader
 from .dicom_loader import DicomLoadError, LoadCancelled, SeriesInfo, Volume
-from .slice_view import SliceView
+from .slice_panel import SlicePanel
 from .windowing import DEFAULT_WL, DEFAULT_WW
 
 
@@ -105,9 +107,15 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1200, 600)
 
         self.volume: Optional[Volume] = None
-        # 現段階は Axial のみ（ステップ3で3断面に拡張する）
-        self.axial_view = SliceView()
-        self.setCentralWidget(self.axial_view)
+        # 横3列: 左から Axial・Coronal・Sagittal
+        self.axial_panel = SlicePanel("Axial", "z")
+        self.coronal_panel = SlicePanel("Coronal", "y")
+        self.sagittal_panel = SlicePanel("Sagittal", "x")
+        central = QWidget()
+        layout = QHBoxLayout(central)
+        for panel in (self.axial_panel, self.coronal_panel, self.sagittal_panel):
+            layout.addWidget(panel, 1)
+        self.setCentralWidget(central)
 
         self._create_menus()
         self.statusBar().showMessage(
@@ -178,13 +186,21 @@ class MainWindow(QMainWindow):
 
         self._set_volume(volume)
 
+    def _show_position(self, i: int, j: int, k: int) -> None:
+        """(i, j, k) = (x, y, z) の位置で3断面を表示する。"""
+        nz, ny, nx = self.volume.shape
+        self.axial_panel.show_slice(*self.volume.axial(k), k, nz)
+        self.coronal_panel.show_slice(*self.volume.coronal(j), j, ny)
+        self.sagittal_panel.show_slice(*self.volume.sagittal(i), i, nx)
+
     def _set_volume(self, volume: Volume) -> None:
         self.volume = volume
         nz, ny, nx = volume.shape
         sx, sy, sz = volume.spacing
-        k = nz // 2  # スライス位置は中央
-        self.axial_view.set_window(DEFAULT_WL, DEFAULT_WW)
-        self.axial_view.set_slice(volume.data[k], spacing=(sx, sy))
+        for panel in (self.axial_panel, self.coronal_panel, self.sagittal_panel):
+            panel.view.set_window(DEFAULT_WL, DEFAULT_WW)
+        # スライス位置は各軸の中央（ステップ5で ViewerState に移す）
+        self._show_position(nx // 2, ny // 2, nz // 2)
         self.statusBar().showMessage(
             f"サイズ: {nx}×{ny}  |  枚数: {nz}  |  "
             f"ピクセル間隔: {sx:.3f}×{sy:.3f} mm（スライス間隔: {sz:.2f} mm）"

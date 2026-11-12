@@ -70,6 +70,20 @@ class Volume:
         """(nz, ny, nx)"""
         return self.data.shape
 
+    # 3断面の切り出し。戻り値は (2D配列, (横, 縦) のピクセル間隔 [mm])。
+    # z は昇順（足側 → 頭側）なので、Coronal / Sagittal は上下反転して頭側を上にする。
+    def axial(self, k: int) -> tuple[np.ndarray, tuple[float, float]]:
+        sx, sy, _ = self.spacing
+        return self.data[k], (sx, sy)
+
+    def coronal(self, j: int) -> tuple[np.ndarray, tuple[float, float]]:
+        sx, _, sz = self.spacing
+        return self.data[::-1, j, :], (sx, sz)
+
+    def sagittal(self, i: int) -> tuple[np.ndarray, tuple[float, float]]:
+        _, sy, sz = self.spacing
+        return self.data[::-1, :, i], (sy, sz)
+
 
 _HEADER_TAGS = [
     "SeriesInstanceUID",
