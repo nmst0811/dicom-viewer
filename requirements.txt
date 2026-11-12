@@ -1,0 +1,7 @@
+# NOTE: keep this file ASCII-only (pip decodes it with the OS locale; cp932 on Japanese Windows).
+PySide6>=6.8,<6.9
+pydicom>=2.4,<2.5
+numpy>=2.1,<2.3
+vtk>=9.4,<9.5
+pylibjpeg
+pylibjpeg-libjpeg
