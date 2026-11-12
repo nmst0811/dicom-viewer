@@ -84,6 +84,26 @@ class Volume:
         _, sy, sz = self.spacing
         return self.data[::-1, :, i], (sy, sz)
 
+    # 位置 (i, j, k) ↔ 各断面画像上の (列, 行)。上下反転の知識はここにまとめる。
+    # 画像上の位置から (i, j, k) に戻す *_pick は、その断面で決まらない軸を None で返す。
+    def axial_cursor(self, i: int, j: int, k: int) -> tuple[int, int]:
+        return i, j
+
+    def coronal_cursor(self, i: int, j: int, k: int) -> tuple[int, int]:
+        return i, self.shape[0] - 1 - k
+
+    def sagittal_cursor(self, i: int, j: int, k: int) -> tuple[int, int]:
+        return j, self.shape[0] - 1 - k
+
+    def axial_pick(self, col: int, row: int):
+        return col, row, None
+
+    def coronal_pick(self, col: int, row: int):
+        return col, None, self.shape[0] - 1 - row
+
+    def sagittal_pick(self, col: int, row: int):
+        return None, col, self.shape[0] - 1 - row
+
 
 _HEADER_TAGS = [
     "SeriesInstanceUID",

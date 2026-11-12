@@ -17,6 +17,7 @@ from .windowing import DEFAULT_WL, DEFAULT_WW, WL_MAX, WL_MIN, WW_MAX, WW_MIN
 
 class SlicePanel(QWidget):
     slice_changed = Signal(int)  # スライス位置（0 始まり）
+    point_clicked = Signal(int, int)  # 画像上のクリック位置 (列, 行)
 
     def __init__(self, title: str, axis: str, parent: Optional[QWidget] = None) -> None:
         """title: 断面名（Axial など）、axis: スライス方向の軸名（z など）。"""
@@ -55,6 +56,7 @@ class SlicePanel(QWidget):
         layout.addLayout(grid)
 
         self.slice_slider.valueChanged.connect(self.slice_changed)
+        self.view.clicked.connect(self.point_clicked)
         self.wl_slider.valueChanged.connect(self._on_window_changed)
         self.ww_slider.valueChanged.connect(self._on_window_changed)
 

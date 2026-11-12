@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 from . import dicom_loader
 from .dicom_loader import DicomLoadError, LoadCancelled, SeriesInfo, Volume
 from .slice_panel import SlicePanel
+from .state import ViewerState
 from .windowing import DEFAULT_WL, DEFAULT_WW
 
 
@@ -117,11 +118,23 @@ class MainWindow(QMainWindow):
             layout.addWidget(panel, 1)
         self.setCentralWidget(central)
 
-        # 現在のスライス位置 [i, j, k] = [x, y, z]（ステップ5で ViewerState に移す）
-        self._pos = [0, 0, 0]
-        self.sagittal_panel.slice_changed.connect(lambda i: self._move_to(i=i))
-        self.coronal_panel.slice_changed.connect(lambda j: self._move_to(j=j))
-        self.axial_panel.slice_changed.connect(lambda k: self._move_to(k=k))
+        # スライス位置 (i, j, k) は ViewerState が一元管理し、変化したら3ビューすべてを再描画する
+        self.state = ViewerState(self)
+        self.state.changed.connect(self._show_position)
+        # スライダー操作 → state（i = Sagittal、j = Coronal、k = Axial のスライダー）
+        self.sagittal_panel.slice_changed.connect(lambda i: self.state.set_position(i=i))
+        self.coronal_panel.slice_changed.connect(lambda j: self.state.set_position(j=j))
+        self.axial_panel.slice_changed.connect(lambda k: self.state.set_position(k=k))
+        # 画像クリック → state（任意機能）。画像上の (列, 行) → (i, j, k) は Volume が変換する
+        self.axial_panel.point_clicked.connect(
+            lambda col, row: self.state.set_position(*self.volume.axial_pick(col, row))
+        )
+        self.coronal_panel.point_clicked.connect(
+            lambda col, row: self.state.set_position(*self.volume.coronal_pick(col, row))
+        )
+        self.sagittal_panel.point_clicked.connect(
+            lambda col, row: self.state.set_position(*self.volume.sagittal_pick(col, row))
+        )
 
         self._create_menus()
         self.statusBar().showMessage(
@@ -192,22 +205,17 @@ class MainWindow(QMainWindow):
 
         self._set_volume(volume)
 
-    def _move_to(self, i: Optional[int] = None, j: Optional[int] = None, k: Optional[int] = None) -> None:
-        """スライダー操作で、指定した軸だけ位置を変えて再表示する。"""
-        if self.volume is None:
-            return
-        for axis, value in enumerate((i, j, k)):
-            if value is not None:
-                self._pos[axis] = value
-        self._show_position(*self._pos)
-
     def _show_position(self, i: int, j: int, k: int) -> None:
-        """(i, j, k) = (x, y, z) の位置で3断面を表示する。"""
-        self._pos = [i, j, k]
-        nz, ny, nx = self.volume.shape
-        self.axial_panel.show_slice(*self.volume.axial(k), k, nz)
-        self.coronal_panel.show_slice(*self.volume.coronal(j), j, ny)
-        self.sagittal_panel.show_slice(*self.volume.sagittal(i), i, nx)
+        """(i, j, k) = (x, y, z) の位置で3断面と十字線を表示する（state.changed の受け口）。"""
+        v = self.volume
+        nz, ny, nx = v.shape
+        self.axial_panel.show_slice(*v.axial(k), k, nz)
+        self.coronal_panel.show_slice(*v.coronal(j), j, ny)
+        self.sagittal_panel.show_slice(*v.sagittal(i), i, nx)
+        # 各ビューには「他の2断面の位置」を示す線を引く
+        self.axial_panel.view.set_crosshair(*v.axial_cursor(i, j, k))  # j: 横線、i: 縦線
+        self.coronal_panel.view.set_crosshair(*v.coronal_cursor(i, j, k))  # k: 横線、i: 縦線
+        self.sagittal_panel.view.set_crosshair(*v.sagittal_cursor(i, j, k))  # k: 横線、j: 縦線
 
     def _set_volume(self, volume: Volume) -> None:
         self.volume = volume
@@ -215,8 +223,7 @@ class MainWindow(QMainWindow):
         sx, sy, sz = volume.spacing
         for panel in (self.axial_panel, self.coronal_panel, self.sagittal_panel):
             panel.set_window(DEFAULT_WL, DEFAULT_WW)
-        # スライス位置は各軸の中央（ステップ5で ViewerState に移す）
-        self._show_position(nx // 2, ny // 2, nz // 2)
+        self.state.set_shape(volume.shape)  # 位置は各軸の中央に戻り、全ビューが再描画される
         self.statusBar().showMessage(
             f"サイズ: {nx}×{ny}  |  枚数: {nz}  |  "
             f"ピクセル間隔: {sx:.3f}×{sy:.3f} mm（スライス間隔: {sz:.2f} mm）"
